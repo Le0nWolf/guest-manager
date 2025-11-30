@@ -360,8 +360,26 @@ _Rollladenautomation ist wieder aktiv_
   });
 
   // Error handling
+  let errorCount = 0;
+  const MAX_ERRORS = 3;
+
   bot.on('polling_error', (error) => {
-    console.error('Telegram Bot polling error:', error.message);
+    errorCount++;
+
+    // Check for authentication errors (invalid token)
+    if (error.code === 'ETELEGRAM' && error.message.includes('401')) {
+      console.error('Telegram Bot: Invalid token - bot disabled');
+      bot.stopPolling();
+      return;
+    }
+
+    console.error(`Telegram Bot polling error: ${error.message}`);
+
+    // Stop polling after too many errors
+    if (errorCount >= MAX_ERRORS) {
+      console.error(`Telegram Bot: Too many errors (${MAX_ERRORS}), stopping...`);
+      bot.stopPolling();
+    }
   });
 
   bot.on('error', (error) => {
