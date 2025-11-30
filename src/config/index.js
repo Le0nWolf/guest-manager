@@ -18,6 +18,32 @@ function parsePort(portEnv) {
   return port;
 }
 
+/**
+ * Validates and normalizes DATA_PATH
+ * @param {string|undefined} pathEnv - DATA_PATH environment variable
+ * @returns {string} Valid data path
+ */
+function parseDataPath(pathEnv) {
+  const defaultPath = './src/data/guests.json';
+  if (!pathEnv) return defaultPath;
+
+  // Must end with .json
+  if (!pathEnv.endsWith('.json')) {
+    throw new Error(`Invalid DATA_PATH: "${pathEnv}" - must end with .json`);
+  }
+
+  // Block dangerous paths
+  const dangerous = ['/etc', '/usr', '/bin', '/sbin', '/var', '/tmp', '/root'];
+  const normalized = pathEnv.toLowerCase();
+  for (const prefix of dangerous) {
+    if (normalized.startsWith(prefix)) {
+      throw new Error(`Invalid DATA_PATH: "${pathEnv}" - system directories not allowed`);
+    }
+  }
+
+  return pathEnv;
+}
+
 const config = {
   // Server configuration
   port: parsePort(process.env.PORT),
@@ -27,7 +53,7 @@ const config = {
   timezone: process.env.TZ || 'Europe/Berlin',
 
   // Data storage path
-  dataPath: process.env.DATA_PATH || './src/data/guests.json',
+  dataPath: parseDataPath(process.env.DATA_PATH),
 
   // Telegram Bot
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
