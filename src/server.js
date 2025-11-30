@@ -14,12 +14,12 @@ const telegramBot = createTelegramBot();
 const server = app.listen(config.port, () => {
   console.log(`
 ╔════════════════════════════════════════════════════════════╗
-║                    Guest Manager                           ║
-║                Smart Home Integration                      ║
+║                      Guest Manager                         ║
+║                  Smart Home Integration                    ║
 ╠════════════════════════════════════════════════════════════╣
-║  Server running on port ${String(config.port).padEnd(33)}║
-║  Environment: ${config.nodeEnv.padEnd(42)}║
-║  Timezone: ${config.timezone.padEnd(45)}║
+║  Server running on port: ${String(config.port).padEnd(31)}║
+║  Environment:            ${config.nodeEnv.padEnd(31)}║
+║  Timezone:               ${config.timezone.padEnd(31)}║
 ╚════════════════════════════════════════════════════════════╝
   `);
 
