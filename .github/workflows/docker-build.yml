@@ -74,18 +74,14 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # Branch name (sanitized for docker tags)
-            type=ref,event=branch
-            # PR number
-            type=ref,event=pr
-            # Semantic version tags
+            # Semantic version tags (v1.0.0 -> 1.0.0, 1.0)
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            # Short SHA
+            # Short SHA for specific commits
             type=sha,prefix=
             # 'latest' only on main/master
             type=raw,value=latest,enable={{is_default_branch}}
-            # 'dev' tag on any non-main branch (for easy testing)
+            # 'dev' tag on any non-main branch
             type=raw,value=dev,enable=${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
 
       - name: Build and push Docker image
