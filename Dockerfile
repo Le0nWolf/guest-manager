@@ -20,10 +20,6 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV TZ=Europe/Berlin
 
-# Create non-root user for security
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
-
 WORKDIR /app
 
 # Copy package files
@@ -37,12 +33,8 @@ RUN npm ci --only=production && \
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/public ./public
 
-# Create data directory and set permissions
-RUN mkdir -p /app/src/data && \
-    chown -R nodejs:nodejs /app
-
-# Switch to non-root user
-USER nodejs
+# Create data directory
+RUN mkdir -p /app/src/data
 
 # Expose port
 EXPOSE 3000
