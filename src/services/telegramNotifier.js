@@ -176,3 +176,28 @@ export async function syncChannelTitle() {
     console.error('Failed to sync channel title:', error.message);
   }
 }
+
+/**
+ * Sends a startup notification to all configured chats
+ */
+export async function sendStartupNotification() {
+  if (!botInstance || !guestServiceInstance) return;
+
+  try {
+    const status = await guestServiceInstance.getStatus();
+    const guestInfo = status.hasActiveGuest && status.currentGuest
+      ? `🟠 Aktuell: ${status.currentGuest.name || 'Gast'} (${formatDateForDisplay(status.currentGuest.arrivalDate)} → ${formatDateForDisplay(status.currentGuest.departureDate)})`
+      : '🟢 Kein Gast eingetragen';
+
+    const message = `
+🏠 *Guest Manager gestartet*
+
+${guestInfo}
+
+_Bot ist bereit für Befehle_`;
+
+    await sendNotification(message);
+  } catch (error) {
+    console.error('Failed to send startup notification:', error.message);
+  }
+}
