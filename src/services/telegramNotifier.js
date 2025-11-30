@@ -88,6 +88,8 @@ export async function updateChatTitle(hasGuest, guestName = '') {
  * @param {string} source - Source of action ('website', 'telegram', 'api')
  */
 export async function notifyCheckin(guest, source = 'website') {
+  console.log(`Telegram Notifier: notifyCheckin called (source: ${source})`);
+
   const guestName = guest.name || 'Gast';
   const sourceIcon = source === 'website' ? '🌐' : source === 'telegram' ? '📱' : '🔌';
 
@@ -111,6 +113,8 @@ ${guest.isActive ? '\n_Rollladenautomation deaktiviert_' : ''}`;
  * @param {string} source - Source of action
  */
 export async function notifyCheckout(guest, source = 'website') {
+  console.log(`Telegram Notifier: notifyCheckout called (source: ${source})`);
+
   const guestName = guest.name || 'Gast';
   const sourceIcon = source === 'website' ? '🌐' : source === 'telegram' ? '📱' : '🔌';
 
@@ -132,6 +136,8 @@ _Rollladenautomation wieder aktiv_`;
  * @param {string} source - Source of action
  */
 export async function notifyDelete(guest, source = 'website') {
+  console.log(`Telegram Notifier: notifyDelete called (source: ${source})`);
+
   const guestName = guest.name || 'Gast';
   const sourceIcon = source === 'website' ? '🌐' : source === 'telegram' ? '📱' : '🔌';
 
