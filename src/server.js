@@ -17,9 +17,9 @@ const server = app.listen(config.port, () => {
 ║                      Guest Manager                         ║
 ║                  Smart Home Integration                    ║
 ╠════════════════════════════════════════════════════════════╣
-║  Server running on port: ${String(config.port).padEnd(31)}║
-║  Environment:            ${config.nodeEnv.padEnd(31)}║
-║  Timezone:               ${config.timezone.padEnd(31)}║
+║  Server running on port: ${String(config.port).padEnd(34)}║
+║  Environment:            ${config.nodeEnv.padEnd(34)}║
+║  Timezone:               ${config.timezone.padEnd(34)}║
 ╚════════════════════════════════════════════════════════════╝
   `);
 
