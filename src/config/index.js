@@ -16,8 +16,9 @@ const config = {
 
   // Telegram Bot
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
-  telegramAuthorizedUsers: process.env.TELEGRAM_AUTHORIZED_USERS
-    ? process.env.TELEGRAM_AUTHORIZED_USERS.split(',').map((id) => id.trim())
+  // Support both TELEGRAM_CHAT_ID (preferred) and TELEGRAM_AUTHORIZED_USERS (legacy)
+  telegramAuthorizedUsers: (process.env.TELEGRAM_CHAT_ID || process.env.TELEGRAM_AUTHORIZED_USERS)
+    ? (process.env.TELEGRAM_CHAT_ID || process.env.TELEGRAM_AUTHORIZED_USERS).split(',').map((id) => id.trim())
     : [],
 
   // Derived properties

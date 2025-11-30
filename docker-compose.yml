@@ -13,8 +13,8 @@ services:
       - PORT=3000
       # Telegram Bot (optional) - get token from @BotFather
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
-      # Comma-separated chat IDs (optional, leave empty for no restrictions)
-      - TELEGRAM_AUTHORIZED_USERS=${TELEGRAM_AUTHORIZED_USERS:-}
+      # Chat-ID(s) für Telegram Bot (optional, kommagetrennt für mehrere)
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/v1/status"]
       interval: 30s
