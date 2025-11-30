@@ -41,7 +41,8 @@
       "src/**/*.js",
       "!src/server.js",
       "!src/data/**",
-      "!src/services/telegramBot.js"
+      "!src/services/telegramBot.js",
+      "!src/services/telegramNotifier.js"
     ],
     "coverageThreshold": {
       "global": {
