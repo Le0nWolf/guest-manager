@@ -1,0 +1,17 @@
+services:
+  guest-manager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: guest-manager-dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./data:/app/src/data
+    environment:
+      - NODE_ENV=development
+      - TZ=Europe/Berlin
+      - PORT=3000
+    command: ["node", "--watch", "src/server.js"]
