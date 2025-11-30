@@ -3,10 +3,23 @@
  * Handles data persistence using JSON file storage
  */
 
-import { readFile, writeFile, mkdir } from 'fs/promises';
+import { readFile, writeFile, mkdir, rename, unlink } from 'fs/promises';
 import { existsSync } from 'fs';
 import { dirname } from 'path';
 import config from '../config/index.js';
+
+/**
+ * Validates a guest object has required fields
+ * @param {*} guest - Object to validate
+ * @returns {boolean} True if valid guest structure
+ */
+function isValidGuest(guest) {
+  if (!guest || typeof guest !== 'object') return false;
+  if (!guest.id || typeof guest.id !== 'string') return false;
+  if (!guest.arrivalDate || typeof guest.arrivalDate !== 'string') return false;
+  if (!guest.departureDate || typeof guest.departureDate !== 'string') return false;
+  return true;
+}
 
 /**
  * Creates a guest repository instance
@@ -40,11 +53,19 @@ export function createGuestRepository(dataPath = config.dataPath) {
       const data = JSON.parse(content);
 
       // Handle both array format and object with guests array
-      if (Array.isArray(data)) {
-        return data;
+      const rawGuests = Array.isArray(data) ? data : (data.guests || []);
+
+      // Filter and validate guests, log any invalid entries
+      const validGuests = [];
+      for (const guest of rawGuests) {
+        if (isValidGuest(guest)) {
+          validGuests.push(guest);
+        } else {
+          console.warn('Invalid guest object found and skipped:', JSON.stringify(guest));
+        }
       }
 
-      return data.guests || [];
+      return validGuests;
     } catch (error) {
       if (error.code === 'ENOENT') {
         return [];
@@ -54,7 +75,8 @@ export function createGuestRepository(dataPath = config.dataPath) {
   }
 
   /**
-   * Writes guests array to the JSON file
+   * Writes guests array to the JSON file using atomic write
+   * (write to temp file, then rename to prevent data corruption)
    * @param {object[]} guests - Array of guests
    */
   async function writeData(guests) {
@@ -65,7 +87,22 @@ export function createGuestRepository(dataPath = config.dataPath) {
       lastUpdated: new Date().toISOString()
     };
 
-    await writeFile(dataPath, JSON.stringify(data, null, 2), 'utf-8');
+    const tempPath = `${dataPath}.tmp`;
+
+    try {
+      // Write to temp file first
+      await writeFile(tempPath, JSON.stringify(data, null, 2), 'utf-8');
+      // Atomic rename (prevents corruption on concurrent writes)
+      await rename(tempPath, dataPath);
+    } catch (error) {
+      // Clean up temp file on error
+      try {
+        await unlink(tempPath);
+      } catch {
+        // Ignore cleanup errors
+      }
+      throw error;
+    }
   }
 
   /**

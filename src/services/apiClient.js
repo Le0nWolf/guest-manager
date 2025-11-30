@@ -8,6 +8,18 @@ import config from '../config/index.js';
 const BASE_URL = `http://localhost:${config.port}/api/v1`;
 
 /**
+ * Validates that a guest ID is a non-empty string
+ * @param {*} guestId - Value to validate
+ * @param {string} operation - Name of operation for error message
+ * @throws {Error} If guestId is invalid
+ */
+function validateGuestId(guestId, operation) {
+  if (!guestId || typeof guestId !== 'string') {
+    throw new Error(`Invalid guestId for ${operation}: expected non-empty string`);
+  }
+}
+
+/**
  * Makes an API request
  * @param {string} endpoint - API endpoint
  * @param {object} options - Fetch options
@@ -16,18 +28,31 @@ const BASE_URL = `http://localhost:${config.port}/api/v1`;
 async function request(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
 
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers
-    }
-  });
+  let response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+      }
+    });
+  } catch (error) {
+    throw new Error(`API request to ${endpoint} failed: ${error.message}`);
+  }
 
-  const data = await response.json();
+  // Parse response body safely
+  const text = await response.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    const preview = text.substring(0, 100);
+    throw new Error(`Invalid JSON response from ${endpoint}: ${preview}${text.length > 100 ? '...' : ''}`);
+  }
 
   if (!response.ok) {
-    throw new Error(data.error?.message || data.message || 'API request failed');
+    throw new Error(data.error || data.message || 'API request failed');
   }
 
   return data.data;
@@ -68,6 +93,7 @@ export async function createGuest(guestData) {
  * @returns {Promise<object>} Updated guest
  */
 export async function checkoutGuest(guestId) {
+  validateGuestId(guestId, 'checkout');
   const result = await request(`/guests/${guestId}/checkout`, {
     method: 'POST'
   });
@@ -80,6 +106,7 @@ export async function checkoutGuest(guestId) {
  * @returns {Promise<void>}
  */
 export async function deleteGuest(guestId) {
+  validateGuestId(guestId, 'delete');
   await request(`/guests/${guestId}`, {
     method: 'DELETE'
   });

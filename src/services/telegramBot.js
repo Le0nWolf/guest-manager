@@ -11,6 +11,16 @@ import { formatDateForDisplay, getToday, getTomorrow, isValidDateFormat } from '
 import config from '../config/index.js';
 
 /**
+ * Escapes special Markdown characters to prevent formatting issues
+ * @param {string} text - Text to escape
+ * @returns {string} Escaped text
+ */
+function escapeMarkdown(text) {
+  if (!text) return '';
+  return text.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+}
+
+/**
  * Creates and starts the Telegram bot
  * @returns {TelegramBot|null} Bot instance or null if not configured
  */
@@ -121,7 +131,7 @@ _Tipp: Für eine Übernachtung einfach /tonight senden!_
       let message;
       if (status.hasActiveGuest && status.currentGuest) {
         const guest = status.currentGuest;
-        const name = guest.name || 'Gast';
+        const name = escapeMarkdown(guest.name) || 'Gast';
         message = `
 🟠 *Gast anwesend*
 
@@ -169,7 +179,7 @@ _Nutze /checkin um einen neuen Gast einzutragen_
 
       for (const guest of data.guests) {
         const statusIcon = guest.status === 'active' ? '🟠' : guest.status === 'future' ? '🔵' : '⚪';
-        const name = guest.name || 'Gast';
+        const name = escapeMarkdown(guest.name) || 'Gast';
         message += `${statusIcon} *${name}*\n`;
         message += `    ${formatDateForDisplay(guest.arrivalDate)} - ${formatDateForDisplay(guest.departureDate)}\n\n`;
       }
@@ -200,7 +210,7 @@ _Nutze /checkin um einen neuen Gast einzutragen_
         departureDate: tomorrow
       });
 
-      const guestName = guest.name || 'Gast';
+      const guestName = escapeMarkdown(guest.name) || 'Gast';
       bot.sendMessage(chatId, `
 🌙 *Übernachtung eingetragen*
 
@@ -268,7 +278,7 @@ _Datumsformat: YYYY-MM-DD_
         departureDate
       });
 
-      const guestName = guest.name || 'Gast';
+      const guestName = escapeMarkdown(guest.name) || 'Gast';
       bot.sendMessage(chatId, `
 ✅ *Gast eingetragen*
 
@@ -299,7 +309,7 @@ ${guest.isActive ? '\n_Rollladenautomation ist jetzt deaktiviert_' : ''}
       }
 
       const guest = status.currentGuest;
-      const guestName = guest.name || 'Gast';
+      const guestName = escapeMarkdown(guest.name) || 'Gast';
 
       // Ask for confirmation
       const confirmMessage = `
@@ -355,9 +365,16 @@ _Abreisedatum wird auf heute gesetzt_
     if (data.startsWith('checkout_')) {
       const guestId = data.replace('checkout_', '');
 
+      // Validate UUID format to prevent malicious input
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (!UUID_REGEX.test(guestId)) {
+        bot.answerCallbackQuery(callbackQuery.id, { text: 'Ungültige Anfrage' });
+        return;
+      }
+
       try {
         const guest = await api.checkoutGuest(guestId);
-        const guestName = guest.name || 'Gast';
+        const guestName = escapeMarkdown(guest.name) || 'Gast';
 
         bot.answerCallbackQuery(callbackQuery.id, { text: 'Ausgecheckt!' });
         bot.editMessageText(`
@@ -394,10 +411,22 @@ _Rollladenautomation ist wieder aktiv_
     bot.sendMessage(chatId, '✅ Aktion abgebrochen.');
   });
 
-  // Error handling
+  // Error handling with time-windowed counter
   let errorCount = 0;
+  let lastErrorTime = 0;
   const MAX_ERRORS = 3;
+  const ERROR_WINDOW_MS = 60000; // 1 minute window
   let isStopping = false;
+
+  /**
+   * Resets error counter (called after successful operations)
+   */
+  function resetErrorCount() {
+    if (errorCount > 0) {
+      errorCount = 0;
+      console.log('Telegram Bot: Error counter reset after successful operation');
+    }
+  }
 
   bot.on('polling_error', (error) => {
     // Prevent multiple stop attempts
@@ -413,15 +442,28 @@ _Rollladenautomation ist wieder aktiv_
       return;
     }
 
-    errorCount++;
-    console.error(`Telegram Bot polling error: ${errorMsg}`);
+    const now = Date.now();
 
-    // Stop polling after too many errors
+    // Reset counter if outside error window
+    if (now - lastErrorTime > ERROR_WINDOW_MS) {
+      errorCount = 0;
+    }
+
+    errorCount++;
+    lastErrorTime = now;
+    console.error(`Telegram Bot polling error (${errorCount}/${MAX_ERRORS}): ${errorMsg}`);
+
+    // Stop polling after too many errors within the time window
     if (errorCount >= MAX_ERRORS) {
       isStopping = true;
-      console.error(`Telegram Bot: Too many errors (${MAX_ERRORS}), stopping...`);
+      console.error(`Telegram Bot: Too many errors (${MAX_ERRORS}) within ${ERROR_WINDOW_MS / 1000}s, stopping...`);
       bot.stopPolling();
     }
+  });
+
+  // Reset error count on successful message handling
+  bot.on('message', () => {
+    resetErrorCount();
   });
 
   bot.on('error', (error) => {
@@ -431,10 +473,29 @@ _Rollladenautomation ist wieder aktiv_
   // Register bot for notifications
   registerBot(bot);
 
-  // Send startup notification (delayed to ensure bot is ready)
-  setTimeout(() => {
-    sendStartupNotification();
-  }, 2000);
+  // Send startup notification with retry logic
+  let startupNotificationSent = false;
+
+  async function trySendStartupNotification(attempt = 1) {
+    if (startupNotificationSent || isStopping) return;
+
+    const MAX_ATTEMPTS = 3;
+    const RETRY_DELAY_MS = 2000;
+
+    try {
+      await sendStartupNotification();
+      startupNotificationSent = true;
+      console.log('Telegram Bot: Startup notification sent');
+    } catch (error) {
+      console.error(`Telegram Bot: Startup notification failed (attempt ${attempt}/${MAX_ATTEMPTS}):`, error.message);
+      if (attempt < MAX_ATTEMPTS) {
+        setTimeout(() => trySendStartupNotification(attempt + 1), RETRY_DELAY_MS);
+      }
+    }
+  }
+
+  // Delay initial attempt to let polling establish
+  setTimeout(() => trySendStartupNotification(), 1000);
 
   console.log('Telegram Bot: Started successfully');
   return bot;
