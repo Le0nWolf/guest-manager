@@ -362,21 +362,28 @@ _Rollladenautomation ist wieder aktiv_
   // Error handling
   let errorCount = 0;
   const MAX_ERRORS = 3;
+  let isStopping = false;
 
   bot.on('polling_error', (error) => {
-    errorCount++;
+    // Prevent multiple stop attempts
+    if (isStopping) return;
+
+    const errorMsg = error.message || String(error);
 
     // Check for authentication errors (invalid token)
-    if (error.code === 'ETELEGRAM' && error.message.includes('401')) {
+    if (errorMsg.includes('401') || errorMsg.includes('Unauthorized')) {
+      isStopping = true;
       console.error('Telegram Bot: Invalid token - bot disabled');
       bot.stopPolling();
       return;
     }
 
-    console.error(`Telegram Bot polling error: ${error.message}`);
+    errorCount++;
+    console.error(`Telegram Bot polling error: ${errorMsg}`);
 
     // Stop polling after too many errors
     if (errorCount >= MAX_ERRORS) {
+      isStopping = true;
       console.error(`Telegram Bot: Too many errors (${MAX_ERRORS}), stopping...`);
       bot.stopPolling();
     }
