@@ -14,6 +14,12 @@ const config = {
   // Data storage path
   dataPath: process.env.DATA_PATH || './src/data/guests.json',
 
+  // Telegram Bot
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
+  telegramAuthorizedUsers: process.env.TELEGRAM_AUTHORIZED_USERS
+    ? process.env.TELEGRAM_AUTHORIZED_USERS.split(',').map((id) => id.trim())
+    : [],
+
   // Derived properties
   get isDevelopment() {
     return this.nodeEnv === 'development';

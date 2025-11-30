@@ -1,0 +1,375 @@
+/**
+ * Telegram Bot Service
+ * Provides a chat interface for guest management
+ */
+
+import TelegramBot from 'node-telegram-bot-api';
+import { createGuestService } from './guestService.js';
+import { formatDateForDisplay, getToday, isValidDateFormat } from '../utils/dateUtils.js';
+import config from '../config/index.js';
+
+/**
+ * Creates and starts the Telegram bot
+ * @param {object} [guestService] - Guest service instance
+ * @returns {TelegramBot|null} Bot instance or null if not configured
+ */
+export function createTelegramBot(guestService = createGuestService()) {
+  const token = config.telegramBotToken;
+
+  if (!token) {
+    console.log('Telegram Bot: No token configured, bot disabled');
+    return null;
+  }
+
+  const bot = new TelegramBot(token, { polling: true });
+  const authorizedUsers = config.telegramAuthorizedUsers;
+
+  console.log('Telegram Bot: Starting...');
+
+  /**
+   * Checks if user is authorized
+   */
+  function isAuthorized(chatId) {
+    if (authorizedUsers.length === 0) {
+      return true; // No restrictions if no users configured
+    }
+    return authorizedUsers.includes(chatId.toString());
+  }
+
+  /**
+   * Sends unauthorized message
+   */
+  function sendUnauthorized(chatId) {
+    bot.sendMessage(chatId, '⛔ Du bist nicht berechtigt, diesen Bot zu nutzen.\n\nDeine Chat-ID: `' + chatId + '`', {
+      parse_mode: 'Markdown'
+    });
+  }
+
+  // /start command
+  bot.onText(/\/start/, (msg) => {
+    const chatId = msg.chat.id;
+
+    if (!isAuthorized(chatId)) {
+      sendUnauthorized(chatId);
+      return;
+    }
+
+    const welcomeMessage = `
+🏠 *Guest Manager Bot*
+
+Verwalte deine Gäste direkt über Telegram!
+
+*Verfügbare Befehle:*
+
+📊 /status - Aktueller Gast-Status
+📋 /list - Alle Gäste anzeigen
+➕ /checkin - Neuen Gast eintragen
+🚪 /checkout - Aktuellen Gast auschecken
+❌ /cancel - Aktuelle Aktion abbrechen
+❓ /help - Diese Hilfe anzeigen
+
+_Tipp: Du kannst auch schnell einen Gast eintragen mit:_
+\`/checkin 2025-12-01 2025-12-05 Max\`
+`;
+
+    bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
+  });
+
+  // /help command
+  bot.onText(/\/help/, (msg) => {
+    const chatId = msg.chat.id;
+
+    if (!isAuthorized(chatId)) {
+      sendUnauthorized(chatId);
+      return;
+    }
+
+    const helpMessage = `
+📖 *Hilfe*
+
+*Schnell-Befehle:*
+• \`/checkin ANKUNFT ABREISE [NAME]\`
+  Beispiel: \`/checkin 2025-12-01 2025-12-05 Max\`
+
+• \`/checkout\` - Checkout des aktuellen Gastes
+
+*Datumsformat:* YYYY-MM-DD (z.B. 2025-12-01)
+
+*Status-Farben:*
+🟢 Kein Gast - Automationen aktiv
+🟠 Gast anwesend - Automationen pausiert
+🔵 Zukünftige Buchung
+⚪ Vergangener Aufenthalt
+`;
+
+    bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
+  });
+
+  // /status command
+  bot.onText(/\/status/, async (msg) => {
+    const chatId = msg.chat.id;
+
+    if (!isAuthorized(chatId)) {
+      sendUnauthorized(chatId);
+      return;
+    }
+
+    try {
+      const status = await guestService.getStatus();
+
+      let message;
+      if (status.hasActiveGuest && status.currentGuest) {
+        const guest = status.currentGuest;
+        const name = guest.name || 'Gast';
+        message = `
+🟠 *Gast anwesend*
+
+👤 ${name}
+📅 ${formatDateForDisplay(guest.arrivalDate)} - ${formatDateForDisplay(guest.departureDate)}
+
+_Automatische Rollladensteuerung ist deaktiviert_
+`;
+      } else {
+        message = `
+🟢 *Kein Gast*
+
+Alle Automationen sind aktiv.
+
+_Nutze /checkin um einen neuen Gast einzutragen_
+`;
+      }
+
+      bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+    } catch (error) {
+      bot.sendMessage(chatId, `❌ Fehler: ${error.message}`);
+    }
+  });
+
+  // /list command
+  bot.onText(/\/list/, async (msg) => {
+    const chatId = msg.chat.id;
+
+    if (!isAuthorized(chatId)) {
+      sendUnauthorized(chatId);
+      return;
+    }
+
+    try {
+      const data = await guestService.getAllGuests();
+
+      if (data.guests.length === 0) {
+        bot.sendMessage(chatId, '📋 Keine Gäste eingetragen.\n\n_Nutze /checkin um einen neuen Gast einzutragen_', {
+          parse_mode: 'Markdown'
+        });
+        return;
+      }
+
+      let message = `📋 *Gästeliste* (${data.total} gesamt, ${data.active} aktiv)\n\n`;
+
+      for (const guest of data.guests) {
+        const statusIcon = guest.status === 'active' ? '🟠' : guest.status === 'future' ? '🔵' : '⚪';
+        const name = guest.name || 'Gast';
+        message += `${statusIcon} *${name}*\n`;
+        message += `    ${formatDateForDisplay(guest.arrivalDate)} - ${formatDateForDisplay(guest.departureDate)}\n\n`;
+      }
+
+      bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+    } catch (error) {
+      bot.sendMessage(chatId, `❌ Fehler: ${error.message}`);
+    }
+  });
+
+  // /checkin command with inline parameters
+  bot.onText(/\/checkin(?:\s+(\S+)\s+(\S+)(?:\s+(.+))?)?/, async (msg, match) => {
+    const chatId = msg.chat.id;
+
+    if (!isAuthorized(chatId)) {
+      sendUnauthorized(chatId);
+      return;
+    }
+
+    const arrivalDate = match[1];
+    const departureDate = match[2];
+    const name = match[3] || '';
+
+    // If no parameters, show interactive prompt
+    if (!arrivalDate || !departureDate) {
+      const today = getToday();
+      const message = `
+➕ *Neuen Gast eintragen*
+
+Sende den Befehl im Format:
+\`/checkin ANKUNFT ABREISE [NAME]\`
+
+*Beispiele:*
+• \`/checkin ${today} 2025-12-05\`
+• \`/checkin ${today} 2025-12-05 Max Mustermann\`
+
+_Datumsformat: YYYY-MM-DD_
+`;
+      bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+      return;
+    }
+
+    // Validate dates
+    if (!isValidDateFormat(arrivalDate)) {
+      bot.sendMessage(chatId, `❌ Ungültiges Ankunftsdatum: \`${arrivalDate}\`\n\nFormat: YYYY-MM-DD`, {
+        parse_mode: 'Markdown'
+      });
+      return;
+    }
+
+    if (!isValidDateFormat(departureDate)) {
+      bot.sendMessage(chatId, `❌ Ungültiges Abreisedatum: \`${departureDate}\`\n\nFormat: YYYY-MM-DD`, {
+        parse_mode: 'Markdown'
+      });
+      return;
+    }
+
+    try {
+      const guest = await guestService.createNewGuest({
+        name: name.trim(),
+        arrivalDate,
+        departureDate
+      });
+
+      const guestName = guest.name || 'Gast';
+      bot.sendMessage(chatId, `
+✅ *Gast eingetragen*
+
+👤 ${guestName}
+📅 ${formatDateForDisplay(guest.arrivalDate)} - ${formatDateForDisplay(guest.departureDate)}
+${guest.isActive ? '\n_Rollladenautomation ist jetzt deaktiviert_' : ''}
+`, { parse_mode: 'Markdown' });
+    } catch (error) {
+      bot.sendMessage(chatId, `❌ Fehler: ${error.message}`);
+    }
+  });
+
+  // /checkout command
+  bot.onText(/\/checkout/, async (msg) => {
+    const chatId = msg.chat.id;
+
+    if (!isAuthorized(chatId)) {
+      sendUnauthorized(chatId);
+      return;
+    }
+
+    try {
+      const status = await guestService.getStatus();
+
+      if (!status.hasActiveGuest || !status.currentGuest) {
+        bot.sendMessage(chatId, '❌ Kein aktiver Gast zum Auschecken vorhanden.');
+        return;
+      }
+
+      const guest = status.currentGuest;
+      const guestName = guest.name || 'Gast';
+
+      // Ask for confirmation
+      const confirmMessage = `
+🚪 *Gast auschecken?*
+
+👤 ${guestName}
+📅 Ankunft: ${formatDateForDisplay(guest.arrivalDate)}
+📅 Geplante Abreise: ${formatDateForDisplay(guest.departureDate)}
+
+_Abreisedatum wird auf heute gesetzt_
+`;
+
+      const keyboard = {
+        inline_keyboard: [
+          [
+            { text: '✅ Ja, auschecken', callback_data: `checkout_${guest.id}` },
+            { text: '❌ Abbrechen', callback_data: 'cancel' }
+          ]
+        ]
+      };
+
+      bot.sendMessage(chatId, confirmMessage, {
+        parse_mode: 'Markdown',
+        reply_markup: keyboard
+      });
+    } catch (error) {
+      bot.sendMessage(chatId, `❌ Fehler: ${error.message}`);
+    }
+  });
+
+  // Handle callback queries (button clicks)
+  bot.on('callback_query', async (callbackQuery) => {
+    const chatId = callbackQuery.message.chat.id;
+    const data = callbackQuery.data;
+    const messageId = callbackQuery.message.message_id;
+
+    if (!isAuthorized(chatId)) {
+      bot.answerCallbackQuery(callbackQuery.id, { text: 'Nicht berechtigt' });
+      return;
+    }
+
+    // Cancel action
+    if (data === 'cancel') {
+      bot.answerCallbackQuery(callbackQuery.id, { text: 'Abgebrochen' });
+      bot.editMessageText('❌ Aktion abgebrochen.', {
+        chat_id: chatId,
+        message_id: messageId
+      });
+      return;
+    }
+
+    // Checkout confirmation
+    if (data.startsWith('checkout_')) {
+      const guestId = data.replace('checkout_', '');
+
+      try {
+        const guest = await guestService.checkoutGuest(guestId);
+        const guestName = guest.name || 'Gast';
+
+        bot.answerCallbackQuery(callbackQuery.id, { text: 'Ausgecheckt!' });
+        bot.editMessageText(`
+✅ *Gast ausgecheckt*
+
+👤 ${guestName}
+📅 Abreise: ${formatDateForDisplay(guest.departureDate)}
+
+_Rollladenautomation ist wieder aktiv_
+`, {
+          chat_id: chatId,
+          message_id: messageId,
+          parse_mode: 'Markdown'
+        });
+      } catch (error) {
+        bot.answerCallbackQuery(callbackQuery.id, { text: 'Fehler!' });
+        bot.editMessageText(`❌ Fehler: ${error.message}`, {
+          chat_id: chatId,
+          message_id: messageId
+        });
+      }
+    }
+  });
+
+  // /cancel command
+  bot.onText(/\/cancel/, (msg) => {
+    const chatId = msg.chat.id;
+
+    if (!isAuthorized(chatId)) {
+      sendUnauthorized(chatId);
+      return;
+    }
+
+    bot.sendMessage(chatId, '✅ Aktion abgebrochen.');
+  });
+
+  // Error handling
+  bot.on('polling_error', (error) => {
+    console.error('Telegram Bot polling error:', error.message);
+  });
+
+  bot.on('error', (error) => {
+    console.error('Telegram Bot error:', error.message);
+  });
+
+  console.log('Telegram Bot: Started successfully');
+  return bot;
+}
+
+export default createTelegramBot;

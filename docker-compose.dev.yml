@@ -14,4 +14,6 @@ services:
       - NODE_ENV=development
       - TZ=Europe/Berlin
       - PORT=3000
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_AUTHORIZED_USERS=${TELEGRAM_AUTHORIZED_USERS:-}
     command: ["node", "--watch", "src/server.js"]

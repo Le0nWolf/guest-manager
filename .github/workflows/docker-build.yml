@@ -3,8 +3,7 @@ name: Build and Push Docker Image
 on:
   push:
     branches:
-      - main
-      - master
+      - '**'  # Build on all branches
     tags:
       - 'v*'
   pull_request:
@@ -75,12 +74,19 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
+            # Branch name (sanitized for docker tags)
             type=ref,event=branch
+            # PR number
             type=ref,event=pr
+            # Semantic version tags
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            # Short SHA
             type=sha,prefix=
+            # 'latest' only on main/master
             type=raw,value=latest,enable={{is_default_branch}}
+            # 'dev' tag on any non-main branch (for easy testing)
+            type=raw,value=dev,enable=${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5

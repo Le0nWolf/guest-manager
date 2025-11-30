@@ -10,6 +10,7 @@ A web application for managing guest stays and integrating with smart home autom
 
 - **Guest Status Tracking**: Track when guests arrive and depart
 - **Smart Home Integration**: REST API for 1home Lua scripts to query guest presence
+- **Telegram Bot**: Manage guests directly from Telegram chat
 - **Mobile-First Design**: Responsive UI optimized for smartphones
 - **Dark Mode**: Automatic and manual dark mode support
 - **Docker Ready**: Multi-architecture images for Raspberry Pi (ARM64) and x86
@@ -96,6 +97,8 @@ docker compose -f docker-compose.dev.yml up --build
 | `NODE_ENV` | `development` | Environment (`development`, `production`, `test`) |
 | `TZ` | `Europe/Berlin` | Timezone for date calculations |
 | `DATA_PATH` | `./src/data/guests.json` | Path to data file |
+| `TELEGRAM_BOT_TOKEN` | - | Telegram Bot token from @BotFather |
+| `TELEGRAM_AUTHORIZED_USERS` | - | Comma-separated list of allowed Telegram chat IDs |
 
 ## API Documentation
 
@@ -200,6 +203,49 @@ Quick action: Sets the guest's departure date to today.
   },
   "message": "Guest checked out successfully"
 }
+```
+
+## Telegram Bot
+
+Manage guests directly from Telegram without opening the web interface.
+
+### Setup
+
+1. **Create a Bot**: Message [@BotFather](https://t.me/BotFather) on Telegram
+   - Send `/newbot`
+   - Choose a name and username
+   - Copy the API token
+
+2. **Get your Chat ID**: Message [@userinfobot](https://t.me/userinfobot)
+   - It will reply with your chat ID
+
+3. **Configure the Bot**:
+```bash
+# In your .env file or docker-compose.yml
+TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
+TELEGRAM_AUTHORIZED_USERS=123456789,987654321  # Optional: restrict access
+```
+
+4. **Restart** the application
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `/start` | Show welcome message and available commands |
+| `/status` | Current guest status |
+| `/list` | Show all guests |
+| `/checkin YYYY-MM-DD YYYY-MM-DD [Name]` | Add new guest |
+| `/checkout` | Check out current guest |
+| `/help` | Show help |
+
+### Quick Examples
+
+```
+/checkin 2025-12-01 2025-12-05 Max Mustermann
+/checkin 2025-12-01 2025-12-05
+/status
+/checkout
 ```
 
 ## 1home Integration
