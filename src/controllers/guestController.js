@@ -3,16 +3,16 @@
  * Handles HTTP requests for guest management
  */
 
-import { createGuestService } from '../services/guestService.js';
+import { guestService } from '../services/guestService.js';
 import { notifyCheckin, notifyCheckout, notifyDelete } from '../services/telegramNotifier.js';
 import { sendSuccess } from '../utils/responseHelper.js';
 
 /**
- * Creates guest controller handlers
- * @param {object} [service] - Guest service instance
+ * Creates guest controller handlers using the shared guestService singleton
  * @returns {object} Controller methods
  */
-export function createGuestController(service = createGuestService()) {
+export function createGuestController() {
+  const service = guestService;
   /**
    * GET /status
    * Returns current guest status for 1home integration

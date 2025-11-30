@@ -4,17 +4,16 @@
  */
 
 import TelegramBot from 'node-telegram-bot-api';
-import { createGuestService } from './guestService.js';
+import { guestService } from './guestService.js';
 import { registerBot, syncChannelTitle, sendStartupNotification } from './telegramNotifier.js';
 import { formatDateForDisplay, getToday, getTomorrow, isValidDateFormat } from '../utils/dateUtils.js';
 import config from '../config/index.js';
 
 /**
  * Creates and starts the Telegram bot
- * @param {object} [guestService] - Guest service instance
  * @returns {TelegramBot|null} Bot instance or null if not configured
  */
-export function createTelegramBot(guestService = createGuestService()) {
+export function createTelegramBot() {
   const token = config.telegramBotToken;
 
   if (!token) {
