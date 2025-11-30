@@ -2,8 +2,10 @@
  * Date Utils Unit Tests
  */
 
+import { jest } from '@jest/globals';
 import {
   getToday,
+  getTomorrow,
   formatDate,
   parseDate,
   isValidDateFormat,
@@ -23,6 +25,76 @@ describe('dateUtils', () => {
       const now = new Date();
       const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       expect(today).toBe(expected);
+    });
+  });
+
+  describe('getTomorrow', () => {
+    it('should return tomorrow\'s date in YYYY-MM-DD format', () => {
+      const tomorrow = getTomorrow();
+      expect(tomorrow).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+      // Verify it's actually tomorrow
+      const now = new Date();
+      now.setDate(now.getDate() + 1);
+      const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      expect(tomorrow).toBe(expected);
+    });
+
+    it('should be exactly one day after today', () => {
+      const today = getToday();
+      const tomorrow = getTomorrow();
+
+      const todayDate = new Date(today + 'T00:00:00');
+      const tomorrowDate = new Date(tomorrow + 'T00:00:00');
+
+      const diffMs = tomorrowDate.getTime() - todayDate.getTime();
+      const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+      expect(diffDays).toBe(1);
+    });
+
+    it('should handle end of month correctly', () => {
+      // Mock: January 31 -> February 1
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date(2025, 0, 31, 12, 0, 0)); // Jan 31, 2025
+
+      const tomorrow = getTomorrow();
+      expect(tomorrow).toBe('2025-02-01');
+
+      jest.useRealTimers();
+    });
+
+    it('should handle end of year correctly', () => {
+      // Mock: December 31 -> January 1
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date(2025, 11, 31, 12, 0, 0)); // Dec 31, 2025
+
+      const tomorrow = getTomorrow();
+      expect(tomorrow).toBe('2026-01-01');
+
+      jest.useRealTimers();
+    });
+
+    it('should handle leap year February correctly', () => {
+      // Mock: Feb 28, 2024 (leap year) -> Feb 29
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date(2024, 1, 28, 12, 0, 0)); // Feb 28, 2024
+
+      const tomorrow = getTomorrow();
+      expect(tomorrow).toBe('2024-02-29');
+
+      jest.useRealTimers();
+    });
+
+    it('should handle non-leap year February correctly', () => {
+      // Mock: Feb 28, 2025 (non-leap year) -> March 1
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date(2025, 1, 28, 12, 0, 0)); // Feb 28, 2025
+
+      const tomorrow = getTomorrow();
+      expect(tomorrow).toBe('2025-03-01');
+
+      jest.useRealTimers();
     });
   });
 

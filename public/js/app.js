@@ -26,6 +26,7 @@ const elements = {
   checkoutBtn: document.getElementById('checkout-btn'),
   editDepartureBtn: document.getElementById('edit-departure-btn'),
   deleteGuestBtn: document.getElementById('delete-guest-btn'),
+  tonightBtn: document.getElementById('tonight-btn'),
   toggleHistory: document.getElementById('toggle-history'),
   historyContent: document.getElementById('history-content'),
   historyChevron: document.getElementById('history-chevron'),
@@ -90,6 +91,9 @@ function setupEventListeners() {
   elements.checkoutBtn.addEventListener('click', handleCheckout);
   elements.editDepartureBtn.addEventListener('click', () => openEditModal(state.currentGuest));
   elements.deleteGuestBtn.addEventListener('click', () => confirmDelete(state.currentGuest));
+
+  // Quick action: Tonight
+  elements.tonightBtn.addEventListener('click', handleTonight);
 
   // History toggle
   elements.toggleHistory.addEventListener('click', toggleHistory);
@@ -240,6 +244,41 @@ async function handleCheckout() {
         ui.showToast(error.message, 'error');
       } finally {
         ui.setButtonLoading(elements.checkoutBtn, false);
+      }
+    }
+  );
+}
+
+/**
+ * Handles quick one-night stay booking
+ */
+async function handleTonight() {
+  const today = ui.getToday();
+  const tomorrow = ui.getTomorrow();
+
+  showConfirmModal(
+    'Eine Nacht buchen',
+    `Gast für heute Nacht eintragen? (${ui.formatDate(today)} → ${ui.formatDate(tomorrow)})`,
+    async () => {
+      ui.setButtonLoading(elements.tonightBtn, true);
+      try {
+        await api.createGuest({
+          name: '',
+          arrivalDate: today,
+          departureDate: tomorrow
+        });
+        ui.showToast('Übernachtung eingetragen - Rollo bleibt morgen unten!', 'success');
+        await loadData();
+
+        // Show history if hidden
+        if (!state.historyVisible) {
+          toggleHistory();
+        }
+      } catch (error) {
+        console.error('Failed to create tonight booking:', error);
+        ui.showToast(error.message, 'error');
+      } finally {
+        ui.setButtonLoading(elements.tonightBtn, false);
       }
     }
   );

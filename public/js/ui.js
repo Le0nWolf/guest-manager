@@ -26,6 +26,19 @@ export function getToday() {
 }
 
 /**
+ * Gets tomorrow's date in YYYY-MM-DD format
+ * @returns {string} Tomorrow's date
+ */
+export function getTomorrow() {
+  const now = new Date();
+  now.setDate(now.getDate() + 1);
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * Renders the status card content
  * @param {object} status - Status data from API
  * @returns {string} HTML content
@@ -216,6 +229,7 @@ export function setButtonLoading(button, loading) {
 export default {
   formatDate,
   getToday,
+  getTomorrow,
   renderStatus,
   renderGuestItem,
   renderGuestList,
