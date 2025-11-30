@@ -5,7 +5,7 @@
 
 import TelegramBot from 'node-telegram-bot-api';
 import { createGuestService } from './guestService.js';
-import { formatDateForDisplay, getToday, isValidDateFormat } from '../utils/dateUtils.js';
+import { formatDateForDisplay, getToday, getTomorrow, isValidDateFormat } from '../utils/dateUtils.js';
 import config from '../config/index.js';
 
 /**
@@ -61,15 +61,14 @@ Verwalte deine Gäste direkt über Telegram!
 
 *Verfügbare Befehle:*
 
+🌙 /tonight - Gast für eine Nacht (schnell!)
 📊 /status - Aktueller Gast-Status
 📋 /list - Alle Gäste anzeigen
 ➕ /checkin - Neuen Gast eintragen
 🚪 /checkout - Aktuellen Gast auschecken
-❌ /cancel - Aktuelle Aktion abbrechen
 ❓ /help - Diese Hilfe anzeigen
 
-_Tipp: Du kannst auch schnell einen Gast eintragen mit:_
-\`/checkin 2025-12-01 2025-12-05 Max\`
+_Tipp: Für eine Übernachtung einfach /tonight senden!_
 `;
 
     bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
@@ -88,12 +87,13 @@ _Tipp: Du kannst auch schnell einen Gast eintragen mit:_
 📖 *Hilfe*
 
 *Schnell-Befehle:*
-• \`/checkin ANKUNFT ABREISE [NAME]\`
-  Beispiel: \`/checkin 2025-12-01 2025-12-05 Max\`
+🌙 \`/tonight [Name]\` - Eine Nacht (heute → morgen)
+➕ \`/checkin ANKUNFT ABREISE [Name]\`
 
-• \`/checkout\` - Checkout des aktuellen Gastes
-
-*Datumsformat:* YYYY-MM-DD (z.B. 2025-12-01)
+*Beispiele:*
+• \`/tonight\` - Schnell für eine Nacht
+• \`/tonight Max\` - Mit Name
+• \`/checkin 2025-12-01 2025-12-05 Max\`
 
 *Status-Farben:*
 🟢 Kein Gast - Automationen aktiv
@@ -174,6 +174,40 @@ _Nutze /checkin um einen neuen Gast einzutragen_
       }
 
       bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+    } catch (error) {
+      bot.sendMessage(chatId, `❌ Fehler: ${error.message}`);
+    }
+  });
+
+  // /tonight command - quick one-night stay
+  bot.onText(/\/tonight(?:\s+(.+))?/, async (msg, match) => {
+    const chatId = msg.chat.id;
+
+    if (!isAuthorized(chatId)) {
+      sendUnauthorized(chatId);
+      return;
+    }
+
+    const name = match[1] || '';
+    const today = getToday();
+    const tomorrow = getTomorrow();
+
+    try {
+      const guest = await guestService.createNewGuest({
+        name: name.trim(),
+        arrivalDate: today,
+        departureDate: tomorrow
+      });
+
+      const guestName = guest.name || 'Gast';
+      bot.sendMessage(chatId, `
+🌙 *Übernachtung eingetragen*
+
+👤 ${guestName}
+📅 ${formatDateForDisplay(today)} → ${formatDateForDisplay(tomorrow)}
+
+_Rollo bleibt morgen früh unten!_
+`, { parse_mode: 'Markdown' });
     } catch (error) {
       bot.sendMessage(chatId, `❌ Fehler: ${error.message}`);
     }

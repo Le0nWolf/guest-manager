@@ -13,6 +13,16 @@ export function getToday() {
 }
 
 /**
+ * Gets tomorrow's date as YYYY-MM-DD string in local timezone
+ * @returns {string} Tomorrow's date
+ */
+export function getTomorrow() {
+  const now = new Date();
+  now.setDate(now.getDate() + 1);
+  return formatDate(now);
+}
+
+/**
  * Formats a Date object to YYYY-MM-DD string
  * @param {Date} date - Date to format
  * @returns {string} Formatted date string
@@ -107,6 +117,7 @@ export function formatDateForDisplay(dateString) {
 
 export default {
   getToday,
+  getTomorrow,
   formatDate,
   parseDate,
   isValidDateFormat,
