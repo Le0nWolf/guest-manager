@@ -8,6 +8,18 @@ import config from '../config/index.js';
 const BASE_URL = `http://localhost:${config.port}/api/v1`;
 
 /**
+ * Validates that a guest ID is a non-empty string
+ * @param {*} guestId - Value to validate
+ * @param {string} operation - Name of operation for error message
+ * @throws {Error} If guestId is invalid
+ */
+function validateGuestId(guestId, operation) {
+  if (!guestId || typeof guestId !== 'string') {
+    throw new Error(`Invalid guestId for ${operation}: expected non-empty string`);
+  }
+}
+
+/**
  * Makes an API request
  * @param {string} endpoint - API endpoint
  * @param {object} options - Fetch options
@@ -81,6 +93,7 @@ export async function createGuest(guestData) {
  * @returns {Promise<object>} Updated guest
  */
 export async function checkoutGuest(guestId) {
+  validateGuestId(guestId, 'checkout');
   const result = await request(`/guests/${guestId}/checkout`, {
     method: 'POST'
   });
@@ -93,6 +106,7 @@ export async function checkoutGuest(guestId) {
  * @returns {Promise<void>}
  */
 export async function deleteGuest(guestId) {
+  validateGuestId(guestId, 'delete');
   await request(`/guests/${guestId}`, {
     method: 'DELETE'
   });

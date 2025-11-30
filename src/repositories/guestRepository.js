@@ -9,6 +9,19 @@ import { dirname } from 'path';
 import config from '../config/index.js';
 
 /**
+ * Validates a guest object has required fields
+ * @param {*} guest - Object to validate
+ * @returns {boolean} True if valid guest structure
+ */
+function isValidGuest(guest) {
+  if (!guest || typeof guest !== 'object') return false;
+  if (!guest.id || typeof guest.id !== 'string') return false;
+  if (!guest.arrivalDate || typeof guest.arrivalDate !== 'string') return false;
+  if (!guest.departureDate || typeof guest.departureDate !== 'string') return false;
+  return true;
+}
+
+/**
  * Creates a guest repository instance
  * @param {string} [dataPath] - Path to the JSON file
  * @returns {object} Repository instance
@@ -40,11 +53,19 @@ export function createGuestRepository(dataPath = config.dataPath) {
       const data = JSON.parse(content);
 
       // Handle both array format and object with guests array
-      if (Array.isArray(data)) {
-        return data;
+      const rawGuests = Array.isArray(data) ? data : (data.guests || []);
+
+      // Filter and validate guests, log any invalid entries
+      const validGuests = [];
+      for (const guest of rawGuests) {
+        if (isValidGuest(guest)) {
+          validGuests.push(guest);
+        } else {
+          console.warn('Invalid guest object found and skipped:', JSON.stringify(guest));
+        }
       }
 
-      return data.guests || [];
+      return validGuests;
     } catch (error) {
       if (error.code === 'ENOENT') {
         return [];

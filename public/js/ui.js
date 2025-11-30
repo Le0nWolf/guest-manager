@@ -137,7 +137,7 @@ export function renderGuestList(guests) {
   if (!guests || guests.length === 0) {
     return `
       <p class="text-center text-gray-500 dark:text-gray-400 py-4">
-        Noch keine Gaste eingetragen
+        Noch keine Gäste eingetragen
       </p>
     `;
   }

@@ -231,7 +231,7 @@ async function handleCheckout() {
 
   showConfirmModal(
     'Gast auschecken',
-    `Mochten Sie den Gast "${state.currentGuest.name || 'Gast'}" jetzt auschecken? Das Abreisedatum wird auf heute gesetzt.`,
+    `Möchten Sie den Gast "${state.currentGuest.name || 'Gast'}" jetzt auschecken? Das Abreisedatum wird auf heute gesetzt.`,
     async () => {
       ui.setButtonLoading(elements.checkoutBtn, true);
       try {
@@ -259,13 +259,21 @@ function handleGuestListClick(e) {
   if (editBtn) {
     const guestId = editBtn.dataset.id;
     const guest = state.guests.find(g => g.id === guestId);
-    if (guest) openEditModal(guest);
+    if (guest) {
+      openEditModal(guest);
+    } else {
+      ui.showToast('Gast nicht gefunden', 'error');
+    }
   }
 
   if (deleteBtn) {
     const guestId = deleteBtn.dataset.id;
     const guest = state.guests.find(g => g.id === guestId);
-    if (guest) confirmDelete(guest);
+    if (guest) {
+      confirmDelete(guest);
+    } else {
+      ui.showToast('Gast nicht gefunden', 'error');
+    }
   }
 }
 
@@ -320,12 +328,12 @@ function confirmDelete(guest) {
   if (!guest) return;
 
   showConfirmModal(
-    'Gast loschen',
-    `Mochten Sie den Aufenthalt von "${guest.name || 'Gast'}" wirklich loschen? Diese Aktion kann nicht ruckgangig gemacht werden.`,
+    'Gast löschen',
+    `Möchten Sie den Aufenthalt von "${guest.name || 'Gast'}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`,
     async () => {
       try {
         await api.deleteGuest(guest.id);
-        ui.showToast('Gast erfolgreich geloscht', 'success');
+        ui.showToast('Gast erfolgreich gelöscht', 'success');
         await loadData();
       } catch (error) {
         console.error('Failed to delete guest:', error);

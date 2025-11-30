@@ -394,10 +394,22 @@ _Rollladenautomation ist wieder aktiv_
     bot.sendMessage(chatId, '✅ Aktion abgebrochen.');
   });
 
-  // Error handling
+  // Error handling with time-windowed counter
   let errorCount = 0;
+  let lastErrorTime = 0;
   const MAX_ERRORS = 3;
+  const ERROR_WINDOW_MS = 60000; // 1 minute window
   let isStopping = false;
+
+  /**
+   * Resets error counter (called after successful operations)
+   */
+  function resetErrorCount() {
+    if (errorCount > 0) {
+      errorCount = 0;
+      console.log('Telegram Bot: Error counter reset after successful operation');
+    }
+  }
 
   bot.on('polling_error', (error) => {
     // Prevent multiple stop attempts
@@ -413,15 +425,28 @@ _Rollladenautomation ist wieder aktiv_
       return;
     }
 
-    errorCount++;
-    console.error(`Telegram Bot polling error: ${errorMsg}`);
+    const now = Date.now();
 
-    // Stop polling after too many errors
+    // Reset counter if outside error window
+    if (now - lastErrorTime > ERROR_WINDOW_MS) {
+      errorCount = 0;
+    }
+
+    errorCount++;
+    lastErrorTime = now;
+    console.error(`Telegram Bot polling error (${errorCount}/${MAX_ERRORS}): ${errorMsg}`);
+
+    // Stop polling after too many errors within the time window
     if (errorCount >= MAX_ERRORS) {
       isStopping = true;
-      console.error(`Telegram Bot: Too many errors (${MAX_ERRORS}), stopping...`);
+      console.error(`Telegram Bot: Too many errors (${MAX_ERRORS}) within ${ERROR_WINDOW_MS / 1000}s, stopping...`);
       bot.stopPolling();
     }
+  });
+
+  // Reset error count on successful message handling
+  bot.on('message', () => {
+    resetErrorCount();
   });
 
   bot.on('error', (error) => {
@@ -431,10 +456,29 @@ _Rollladenautomation ist wieder aktiv_
   // Register bot for notifications
   registerBot(bot);
 
-  // Send startup notification (delayed to ensure bot is ready)
-  setTimeout(() => {
-    sendStartupNotification();
-  }, 2000);
+  // Send startup notification with retry logic
+  let startupNotificationSent = false;
+
+  async function trySendStartupNotification(attempt = 1) {
+    if (startupNotificationSent || isStopping) return;
+
+    const MAX_ATTEMPTS = 3;
+    const RETRY_DELAY_MS = 2000;
+
+    try {
+      await sendStartupNotification();
+      startupNotificationSent = true;
+      console.log('Telegram Bot: Startup notification sent');
+    } catch (error) {
+      console.error(`Telegram Bot: Startup notification failed (attempt ${attempt}/${MAX_ATTEMPTS}):`, error.message);
+      if (attempt < MAX_ATTEMPTS) {
+        setTimeout(() => trySendStartupNotification(attempt + 1), RETRY_DELAY_MS);
+      }
+    }
+  }
+
+  // Delay initial attempt to let polling establish
+  setTimeout(() => trySendStartupNotification(), 1000);
 
   console.log('Telegram Bot: Started successfully');
   return bot;
