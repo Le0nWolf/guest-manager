@@ -3,9 +3,24 @@
  * Loads configuration from environment variables with sensible defaults
  */
 
+/**
+ * Parses and validates port number
+ * @param {string|undefined} portEnv - PORT environment variable
+ * @returns {number} Valid port number
+ */
+function parsePort(portEnv) {
+  if (!portEnv) return 3000;
+
+  const port = parseInt(portEnv, 10);
+  if (isNaN(port) || port < 1 || port > 65535) {
+    throw new Error(`Invalid PORT: "${portEnv}" - must be a number between 1 and 65535`);
+  }
+  return port;
+}
+
 const config = {
   // Server configuration
-  port: parseInt(process.env.PORT, 10) || 3000,
+  port: parsePort(process.env.PORT),
   nodeEnv: process.env.NODE_ENV || 'development',
 
   // Timezone

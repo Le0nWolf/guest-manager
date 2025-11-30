@@ -3,7 +3,7 @@
  * Handles data persistence using JSON file storage
  */
 
-import { readFile, writeFile, mkdir } from 'fs/promises';
+import { readFile, writeFile, mkdir, rename, unlink } from 'fs/promises';
 import { existsSync } from 'fs';
 import { dirname } from 'path';
 import config from '../config/index.js';
@@ -54,7 +54,8 @@ export function createGuestRepository(dataPath = config.dataPath) {
   }
 
   /**
-   * Writes guests array to the JSON file
+   * Writes guests array to the JSON file using atomic write
+   * (write to temp file, then rename to prevent data corruption)
    * @param {object[]} guests - Array of guests
    */
   async function writeData(guests) {
@@ -65,7 +66,22 @@ export function createGuestRepository(dataPath = config.dataPath) {
       lastUpdated: new Date().toISOString()
     };
 
-    await writeFile(dataPath, JSON.stringify(data, null, 2), 'utf-8');
+    const tempPath = `${dataPath}.tmp`;
+
+    try {
+      // Write to temp file first
+      await writeFile(tempPath, JSON.stringify(data, null, 2), 'utf-8');
+      // Atomic rename (prevents corruption on concurrent writes)
+      await rename(tempPath, dataPath);
+    } catch (error) {
+      // Clean up temp file on error
+      try {
+        await unlink(tempPath);
+      } catch {
+        // Ignore cleanup errors
+      }
+      throw error;
+    }
   }
 
   /**

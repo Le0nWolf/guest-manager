@@ -16,18 +16,31 @@ const BASE_URL = `http://localhost:${config.port}/api/v1`;
 async function request(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
 
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers
-    }
-  });
+  let response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+      }
+    });
+  } catch (error) {
+    throw new Error(`API request to ${endpoint} failed: ${error.message}`);
+  }
 
-  const data = await response.json();
+  // Parse response body safely
+  const text = await response.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    const preview = text.substring(0, 100);
+    throw new Error(`Invalid JSON response from ${endpoint}: ${preview}${text.length > 100 ? '...' : ''}`);
+  }
 
   if (!response.ok) {
-    throw new Error(data.error?.message || data.message || 'API request failed');
+    throw new Error(data.error || data.message || 'API request failed');
   }
 
   return data.data;

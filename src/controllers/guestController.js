@@ -61,7 +61,9 @@ export function createGuestController() {
       const guest = await service.createNewGuest(req.body);
 
       // Send Telegram notification (async, don't wait)
-      notifyCheckin(guest, 'website').catch(() => {});
+      notifyCheckin(guest, 'website').catch((err) => {
+        console.error('Telegram notification failed (checkin):', err.message);
+      });
 
       sendSuccess(res, { guest }, {
         statusCode: 201,
@@ -98,7 +100,9 @@ export function createGuestController() {
       await service.deleteGuest(req.params.id);
 
       // Send Telegram notification (async, don't wait)
-      notifyDelete(guest, 'website').catch(() => {});
+      notifyDelete(guest, 'website').catch((err) => {
+        console.error('Telegram notification failed (delete):', err.message);
+      });
 
       sendSuccess(res, null, {
         message: 'Guest deleted successfully'
@@ -117,7 +121,9 @@ export function createGuestController() {
       const guest = await service.checkoutGuest(req.params.id);
 
       // Send Telegram notification (async, don't wait)
-      notifyCheckout(guest, 'website').catch(() => {});
+      notifyCheckout(guest, 'website').catch((err) => {
+        console.error('Telegram notification failed (checkout):', err.message);
+      });
 
       sendSuccess(res, { guest }, {
         message: 'Guest checked out successfully'
