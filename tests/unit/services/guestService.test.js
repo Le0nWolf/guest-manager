@@ -171,7 +171,7 @@ describe('guestService', () => {
         departureDate: formatDate(new Date(Date.now() + 10 * 86400000))
       };
 
-      await expect(service.createNewGuest(data)).rejects.toThrow('Date range overlaps');
+      await expect(service.createNewGuest(data)).rejects.toThrow('Zeitraum überschneidet sich');
     });
   });
 

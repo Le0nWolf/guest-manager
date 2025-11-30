@@ -5,7 +5,7 @@
 
 import { createGuest, validateGuestInput, enrichGuest, updateGuest } from '../models/guest.js';
 import { createGuestRepository } from '../repositories/guestRepository.js';
-import { getToday, isDateRangeActive } from '../utils/dateUtils.js';
+import { getToday, isDateRangeActive, formatDateForDisplay } from '../utils/dateUtils.js';
 import { createError } from '../middleware/errorHandler.js';
 
 /**
@@ -21,7 +21,7 @@ export function createGuestService(repository = createGuestRepository()) {
   async function getStatus() {
     const guests = await repository.findAll();
     const activeGuest = guests.find((g) =>
-      isDateRangeActive(g.arrivalDate, g.departureDate)
+      !g.checkoutDate && isDateRangeActive(g.arrivalDate, g.departureDate)
     );
 
     return {
@@ -79,9 +79,11 @@ export function createGuestService(repository = createGuestRepository()) {
       throw createError.badRequest('Validation failed', validation.errors);
     }
 
-    // Check for overlapping active dates
+    // Check for overlapping dates (exclude checked-out guests)
     const existingGuests = await repository.findAll();
     const overlapping = existingGuests.find((g) => {
+      // Skip checked-out guests - their dates are free again
+      if (g.checkoutDate) return false;
       // Check if date ranges overlap
       return (
         data.arrivalDate <= g.departureDate &&
@@ -90,8 +92,10 @@ export function createGuestService(repository = createGuestRepository()) {
     });
 
     if (overlapping) {
+      const guestName = overlapping.name || 'Gast';
+      const dates = `${formatDateForDisplay(overlapping.arrivalDate)} - ${formatDateForDisplay(overlapping.departureDate)}`;
       throw createError.conflict(
-        `Date range overlaps with existing guest (${overlapping.name || 'Unnamed'}: ${overlapping.arrivalDate} - ${overlapping.departureDate})`
+        `Zeitraum überschneidet sich mit ${guestName} (${dates})`
       );
     }
 
@@ -136,16 +140,19 @@ export function createGuestService(repository = createGuestRepository()) {
         throw createError.badRequest('Validation failed', rangeValidation.errors);
       }
 
-      // Check for overlaps with other guests
+      // Check for overlaps with other guests (exclude checked-out)
       const allGuests = await repository.findAll();
       const overlapping = allGuests.find((g) => {
         if (g.id === id) return false; // Skip self
+        if (g.checkoutDate) return false; // Skip checked-out guests
         return newArrival <= g.departureDate && newDeparture >= g.arrivalDate;
       });
 
       if (overlapping) {
+        const guestName = overlapping.name || 'Gast';
+        const dates = `${formatDateForDisplay(overlapping.arrivalDate)} - ${formatDateForDisplay(overlapping.departureDate)}`;
         throw createError.conflict(
-          `Date range overlaps with existing guest (${overlapping.name || 'Unnamed'}: ${overlapping.arrivalDate} - ${overlapping.departureDate})`
+          `Zeitraum überschneidet sich mit ${guestName} (${dates})`
         );
       }
     }
