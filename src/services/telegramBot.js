@@ -11,6 +11,16 @@ import { formatDateForDisplay, getToday, getTomorrow, isValidDateFormat } from '
 import config from '../config/index.js';
 
 /**
+ * Escapes special Markdown characters to prevent formatting issues
+ * @param {string} text - Text to escape
+ * @returns {string} Escaped text
+ */
+function escapeMarkdown(text) {
+  if (!text) return '';
+  return text.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+}
+
+/**
  * Creates and starts the Telegram bot
  * @returns {TelegramBot|null} Bot instance or null if not configured
  */
@@ -121,7 +131,7 @@ _Tipp: Für eine Übernachtung einfach /tonight senden!_
       let message;
       if (status.hasActiveGuest && status.currentGuest) {
         const guest = status.currentGuest;
-        const name = guest.name || 'Gast';
+        const name = escapeMarkdown(guest.name) || 'Gast';
         message = `
 🟠 *Gast anwesend*
 
@@ -169,7 +179,7 @@ _Nutze /checkin um einen neuen Gast einzutragen_
 
       for (const guest of data.guests) {
         const statusIcon = guest.status === 'active' ? '🟠' : guest.status === 'future' ? '🔵' : '⚪';
-        const name = guest.name || 'Gast';
+        const name = escapeMarkdown(guest.name) || 'Gast';
         message += `${statusIcon} *${name}*\n`;
         message += `    ${formatDateForDisplay(guest.arrivalDate)} - ${formatDateForDisplay(guest.departureDate)}\n\n`;
       }
@@ -200,7 +210,7 @@ _Nutze /checkin um einen neuen Gast einzutragen_
         departureDate: tomorrow
       });
 
-      const guestName = guest.name || 'Gast';
+      const guestName = escapeMarkdown(guest.name) || 'Gast';
       bot.sendMessage(chatId, `
 🌙 *Übernachtung eingetragen*
 
@@ -268,7 +278,7 @@ _Datumsformat: YYYY-MM-DD_
         departureDate
       });
 
-      const guestName = guest.name || 'Gast';
+      const guestName = escapeMarkdown(guest.name) || 'Gast';
       bot.sendMessage(chatId, `
 ✅ *Gast eingetragen*
 
@@ -299,7 +309,7 @@ ${guest.isActive ? '\n_Rollladenautomation ist jetzt deaktiviert_' : ''}
       }
 
       const guest = status.currentGuest;
-      const guestName = guest.name || 'Gast';
+      const guestName = escapeMarkdown(guest.name) || 'Gast';
 
       // Ask for confirmation
       const confirmMessage = `
@@ -355,9 +365,16 @@ _Abreisedatum wird auf heute gesetzt_
     if (data.startsWith('checkout_')) {
       const guestId = data.replace('checkout_', '');
 
+      // Validate UUID format to prevent malicious input
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (!UUID_REGEX.test(guestId)) {
+        bot.answerCallbackQuery(callbackQuery.id, { text: 'Ungültige Anfrage' });
+        return;
+      }
+
       try {
         const guest = await api.checkoutGuest(guestId);
-        const guestName = guest.name || 'Gast';
+        const guestName = escapeMarkdown(guest.name) || 'Gast';
 
         bot.answerCallbackQuery(callbackQuery.id, { text: 'Ausgecheckt!' });
         bot.editMessageText(`
