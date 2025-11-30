@@ -1,23 +1,22 @@
 /**
  * Telegram Notification Service
  * Sends notifications and manages channel status
+ * Uses the REST API for data operations (same as website and Telegram bot)
  */
 
+import * as api from './apiClient.js';
 import config from '../config/index.js';
 import { formatDateForDisplay } from '../utils/dateUtils.js';
 
 // Singleton state
 let botInstance = null;
-let guestServiceInstance = null;
 
 /**
  * Registers the bot instance for notifications
  * @param {TelegramBot} bot - The bot instance
- * @param {object} guestService - Guest service instance
  */
-export function registerBot(bot, guestService) {
+export function registerBot(bot) {
   botInstance = bot;
-  guestServiceInstance = guestService;
   console.log('Telegram Notifier: Registered with', getChatIds().length, 'chat(s)');
 }
 
@@ -149,18 +148,16 @@ ${sourceIcon} *Buchung gelöscht*
 
   await sendNotification(message);
 
-  // Check if there's still an active guest
-  if (guestServiceInstance) {
-    try {
-      const status = await guestServiceInstance.getStatus();
-      if (status.hasActiveGuest && status.currentGuest) {
-        await updateChatTitle(true, status.currentGuest.name);
-      } else {
-        await updateChatTitle(false);
-      }
-    } catch {
+  // Check if there's still an active guest via API
+  try {
+    const status = await api.getStatus();
+    if (status.hasActiveGuest && status.currentGuest) {
+      await updateChatTitle(true, status.currentGuest.name);
+    } else {
       await updateChatTitle(false);
     }
+  } catch {
+    await updateChatTitle(false);
   }
 }
 
@@ -169,10 +166,10 @@ ${sourceIcon} *Buchung gelöscht*
  * Call this on startup to sync the title
  */
 export async function syncChannelTitle() {
-  if (!botInstance || !guestServiceInstance) return;
+  if (!botInstance) return;
 
   try {
-    const status = await guestServiceInstance.getStatus();
+    const status = await api.getStatus();
     if (status.hasActiveGuest && status.currentGuest) {
       await updateChatTitle(true, status.currentGuest.name);
     } else {
@@ -187,10 +184,10 @@ export async function syncChannelTitle() {
  * Sends a startup notification to all configured chats
  */
 export async function sendStartupNotification() {
-  if (!botInstance || !guestServiceInstance) return;
+  if (!botInstance) return;
 
   try {
-    const status = await guestServiceInstance.getStatus();
+    const status = await api.getStatus();
     const guestInfo = status.hasActiveGuest && status.currentGuest
       ? `🟠 Aktuell: ${status.currentGuest.name || 'Gast'} (${formatDateForDisplay(status.currentGuest.arrivalDate)} → ${formatDateForDisplay(status.currentGuest.departureDate)})`
       : '🟢 Kein Gast eingetragen';

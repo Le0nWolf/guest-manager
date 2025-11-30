@@ -1,10 +1,11 @@
 /**
  * Telegram Bot Service
  * Provides a chat interface for guest management
+ * Uses the REST API for all data operations (same as website)
  */
 
 import TelegramBot from 'node-telegram-bot-api';
-import { guestService } from './guestService.js';
+import * as api from './apiClient.js';
 import { registerBot, syncChannelTitle, sendStartupNotification } from './telegramNotifier.js';
 import { formatDateForDisplay, getToday, getTomorrow, isValidDateFormat } from '../utils/dateUtils.js';
 import config from '../config/index.js';
@@ -115,7 +116,7 @@ _Tipp: Für eine Übernachtung einfach /tonight senden!_
     }
 
     try {
-      const status = await guestService.getStatus();
+      const status = await api.getStatus();
 
       let message;
       if (status.hasActiveGuest && status.currentGuest) {
@@ -155,7 +156,7 @@ _Nutze /checkin um einen neuen Gast einzutragen_
     }
 
     try {
-      const data = await guestService.getAllGuests();
+      const data = await api.getAllGuests();
 
       if (data.guests.length === 0) {
         bot.sendMessage(chatId, '📋 Keine Gäste eingetragen.\n\n_Nutze /checkin um einen neuen Gast einzutragen_', {
@@ -193,7 +194,7 @@ _Nutze /checkin um einen neuen Gast einzutragen_
     const tomorrow = getTomorrow();
 
     try {
-      const guest = await guestService.createNewGuest({
+      const guest = await api.createGuest({
         name: name.trim(),
         arrivalDate: today,
         departureDate: tomorrow
@@ -261,7 +262,7 @@ _Datumsformat: YYYY-MM-DD_
     }
 
     try {
-      const guest = await guestService.createNewGuest({
+      const guest = await api.createGuest({
         name: name.trim(),
         arrivalDate,
         departureDate
@@ -290,7 +291,7 @@ ${guest.isActive ? '\n_Rollladenautomation ist jetzt deaktiviert_' : ''}
     }
 
     try {
-      const status = await guestService.getStatus();
+      const status = await api.getStatus();
 
       if (!status.hasActiveGuest || !status.currentGuest) {
         bot.sendMessage(chatId, '❌ Kein aktiver Gast zum Auschecken vorhanden.');
@@ -355,7 +356,7 @@ _Abreisedatum wird auf heute gesetzt_
       const guestId = data.replace('checkout_', '');
 
       try {
-        const guest = await guestService.checkoutGuest(guestId);
+        const guest = await api.checkoutGuest(guestId);
         const guestName = guest.name || 'Gast';
 
         bot.answerCallbackQuery(callbackQuery.id, { text: 'Ausgecheckt!' });
@@ -428,7 +429,7 @@ _Rollladenautomation ist wieder aktiv_
   });
 
   // Register bot for notifications
-  registerBot(bot, guestService);
+  registerBot(bot);
 
   // Sync channel title and send startup notification (delayed to ensure bot is ready)
   setTimeout(() => {
