@@ -53,10 +53,12 @@ let pendingConfirmAction = null;
  * Initializes the application
  */
 async function init() {
-  // Set default dates
+  // Set default dates (today → tomorrow = one night)
   const today = ui.getToday();
+  const tomorrow = ui.getTomorrow();
   elements.arrivalDate.value = today;
   elements.arrivalDate.min = today;
+  elements.departureDate.value = tomorrow;
   elements.departureDate.min = today;
 
   // Set up event listeners
@@ -79,12 +81,13 @@ function setupEventListeners() {
   // Add guest form
   elements.addGuestForm.addEventListener('submit', handleAddGuest);
 
-  // Date validation
+  // Date validation - auto-set departure to day after arrival
   elements.arrivalDate.addEventListener('change', () => {
+    const arrival = new Date(elements.arrivalDate.value);
+    arrival.setDate(arrival.getDate() + 1);
+    const nextDay = arrival.toISOString().split('T')[0];
     elements.departureDate.min = elements.arrivalDate.value;
-    if (elements.departureDate.value < elements.arrivalDate.value) {
-      elements.departureDate.value = elements.arrivalDate.value;
-    }
+    elements.departureDate.value = nextDay;
   });
 
   // Active guest actions

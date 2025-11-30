@@ -18,6 +18,7 @@ let guestServiceInstance = null;
 export function registerBot(bot, guestService) {
   botInstance = bot;
   guestServiceInstance = guestService;
+  console.log('Telegram Notifier: Registered with', getChatIds().length, 'chat(s)');
 }
 
 /**
@@ -33,14 +34,21 @@ function getChatIds() {
  * @param {string} message - Message to send (Markdown)
  */
 export async function sendNotification(message) {
-  if (!botInstance) return;
+  if (!botInstance) {
+    console.log('Telegram Notifier: No bot instance registered');
+    return;
+  }
 
   const chatIds = getChatIds();
-  if (chatIds.length === 0) return;
+  if (chatIds.length === 0) {
+    console.log('Telegram Notifier: No chat IDs configured');
+    return;
+  }
 
   for (const chatId of chatIds) {
     try {
       await botInstance.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+      console.log(`Telegram Notifier: Sent to ${chatId}`);
     } catch (error) {
       console.error(`Telegram notification failed for chat ${chatId}:`, error.message);
     }
