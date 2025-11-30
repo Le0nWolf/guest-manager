@@ -4,6 +4,7 @@
  */
 
 import { createGuestService } from '../services/guestService.js';
+import { notifyCheckin, notifyCheckout, notifyDelete } from '../services/telegramNotifier.js';
 import { sendSuccess } from '../utils/responseHelper.js';
 
 /**
@@ -58,6 +59,10 @@ export function createGuestController(service = createGuestService()) {
   async function createGuest(req, res, next) {
     try {
       const guest = await service.createNewGuest(req.body);
+
+      // Send Telegram notification (async, don't wait)
+      notifyCheckin(guest, 'website').catch(() => {});
+
       sendSuccess(res, { guest }, {
         statusCode: 201,
         message: 'Guest created successfully'
@@ -88,7 +93,13 @@ export function createGuestController(service = createGuestService()) {
    */
   async function deleteGuest(req, res, next) {
     try {
+      // Get guest data before deletion for notification
+      const guest = await service.getGuestById(req.params.id);
       await service.deleteGuest(req.params.id);
+
+      // Send Telegram notification (async, don't wait)
+      notifyDelete(guest, 'website').catch(() => {});
+
       sendSuccess(res, null, {
         message: 'Guest deleted successfully'
       });
@@ -104,6 +115,10 @@ export function createGuestController(service = createGuestService()) {
   async function checkoutGuest(req, res, next) {
     try {
       const guest = await service.checkoutGuest(req.params.id);
+
+      // Send Telegram notification (async, don't wait)
+      notifyCheckout(guest, 'website').catch(() => {});
+
       sendSuccess(res, { guest }, {
         message: 'Guest checked out successfully'
       });

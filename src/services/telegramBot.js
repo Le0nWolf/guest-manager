@@ -5,6 +5,7 @@
 
 import TelegramBot from 'node-telegram-bot-api';
 import { createGuestService } from './guestService.js';
+import { registerBot, syncChannelTitle } from './telegramNotifier.js';
 import { formatDateForDisplay, getToday, getTomorrow, isValidDateFormat } from '../utils/dateUtils.js';
 import config from '../config/index.js';
 
@@ -426,6 +427,14 @@ _Rollladenautomation ist wieder aktiv_
   bot.on('error', (error) => {
     console.error('Telegram Bot error:', error.message);
   });
+
+  // Register bot for notifications
+  registerBot(bot, guestService);
+
+  // Sync channel title on startup (delayed to ensure bot is ready)
+  setTimeout(() => {
+    syncChannelTitle();
+  }, 2000);
 
   console.log('Telegram Bot: Started successfully');
   return bot;
