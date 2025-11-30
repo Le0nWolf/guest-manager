@@ -1,6 +1,6 @@
 /**
  * Telegram Notification Service
- * Sends notifications and manages channel status
+ * Sends notifications for guest events
  * Uses the REST API for data operations (same as website and Telegram bot)
  */
 
@@ -55,33 +55,6 @@ export async function sendNotification(message) {
 }
 
 /**
- * Updates the chat title to reflect guest status
- * @param {boolean} hasGuest - Whether a guest is present
- * @param {string} [guestName] - Optional guest name
- */
-export async function updateChatTitle(hasGuest, guestName = '') {
-  if (!botInstance) return;
-
-  const chatIds = getChatIds();
-  if (chatIds.length === 0) return;
-
-  const title = hasGuest
-    ? `🟠 Gast: ${guestName || 'anwesend'}`
-    : '🟢 Kein Gast';
-
-  for (const chatId of chatIds) {
-    try {
-      await botInstance.setChatTitle(chatId, title);
-    } catch (error) {
-      // Bot might not have permission to change title
-      if (!error.message?.includes('not enough rights')) {
-        console.error(`Failed to update chat title for ${chatId}:`, error.message);
-      }
-    }
-  }
-}
-
-/**
  * Notifies about a new guest check-in
  * @param {object} guest - Guest data
  * @param {string} source - Source of action ('website', 'telegram', 'api')
@@ -100,10 +73,6 @@ ${sourceIcon} *Neuer Check-in*
 ${guest.isActive ? '\n_Rollladenautomation deaktiviert_' : ''}`;
 
   await sendNotification(message);
-
-  if (guest.isActive) {
-    await updateChatTitle(true, guestName);
-  }
 }
 
 /**
@@ -126,7 +95,6 @@ ${sourceIcon} *Check-out*
 _Rollladenautomation wieder aktiv_`;
 
   await sendNotification(message);
-  await updateChatTitle(false);
 }
 
 /**
@@ -147,37 +115,6 @@ ${sourceIcon} *Buchung gelöscht*
 📅 ${formatDateForDisplay(guest.arrivalDate)} → ${formatDateForDisplay(guest.departureDate)}`;
 
   await sendNotification(message);
-
-  // Check if there's still an active guest via API
-  try {
-    const status = await api.getStatus();
-    if (status.hasActiveGuest && status.currentGuest) {
-      await updateChatTitle(true, status.currentGuest.name);
-    } else {
-      await updateChatTitle(false);
-    }
-  } catch {
-    await updateChatTitle(false);
-  }
-}
-
-/**
- * Updates channel title based on current status
- * Call this on startup to sync the title
- */
-export async function syncChannelTitle() {
-  if (!botInstance) return;
-
-  try {
-    const status = await api.getStatus();
-    if (status.hasActiveGuest && status.currentGuest) {
-      await updateChatTitle(true, status.currentGuest.name);
-    } else {
-      await updateChatTitle(false);
-    }
-  } catch (error) {
-    console.error('Failed to sync channel title:', error.message);
-  }
 }
 
 /**

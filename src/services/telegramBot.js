@@ -6,7 +6,7 @@
 
 import TelegramBot from 'node-telegram-bot-api';
 import * as api from './apiClient.js';
-import { registerBot, syncChannelTitle, sendStartupNotification } from './telegramNotifier.js';
+import { registerBot, sendStartupNotification } from './telegramNotifier.js';
 import { formatDateForDisplay, getToday, getTomorrow, isValidDateFormat } from '../utils/dateUtils.js';
 import config from '../config/index.js';
 
@@ -431,9 +431,8 @@ _Rollladenautomation ist wieder aktiv_
   // Register bot for notifications
   registerBot(bot);
 
-  // Sync channel title and send startup notification (delayed to ensure bot is ready)
+  // Send startup notification (delayed to ensure bot is ready)
   setTimeout(() => {
-    syncChannelTitle();
     sendStartupNotification();
   }, 2000);
 

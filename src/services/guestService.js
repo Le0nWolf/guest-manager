@@ -172,10 +172,10 @@ export function createGuestService(repository = createGuestRepository()) {
   }
 
   /**
-   * Checks out a guest (sets departure to today)
+   * Checks out a guest (marks as checked out)
    * @param {string} id - Guest ID
    * @returns {Promise<object>} Updated guest
-   * @throws {ApiError} If guest not found or already departed
+   * @throws {ApiError} If guest not found or already checked out
    */
   async function checkoutGuest(id) {
     const guest = await repository.findById(id);
@@ -184,19 +184,23 @@ export function createGuestService(repository = createGuestRepository()) {
       throw createError.notFound(`Guest with ID ${id} not found`);
     }
 
-    const today = getToday();
-
-    // Check if guest is still here
-    if (guest.departureDate < today) {
-      throw createError.badRequest('Guest has already departed');
+    // Check if already checked out
+    if (guest.checkoutDate) {
+      throw createError.badRequest('Guest has already been checked out');
     }
 
+    const today = getToday();
+
+    // Check if guest has arrived
     if (guest.arrivalDate > today) {
       throw createError.badRequest('Guest has not arrived yet');
     }
 
-    // Set departure to today
-    const updatedGuest = updateGuest(guest, { departureDate: today });
+    // Set checkout date to now
+    const updatedGuest = updateGuest(guest, {
+      checkoutDate: today,
+      departureDate: today  // Also update departure for accuracy
+    });
     await repository.update(id, updatedGuest);
 
     return enrichGuest(updatedGuest);

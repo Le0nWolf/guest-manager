@@ -89,10 +89,14 @@ export function validateGuestInput(data, isUpdate = false) {
  * @returns {object} Guest with computed properties
  */
 export function enrichGuest(guest) {
+  // If checkoutDate is set, guest is no longer active
+  const isActive = !guest.checkoutDate && isDateRangeActive(guest.arrivalDate, guest.departureDate);
+  const status = guest.checkoutDate ? 'past' : getDateRangeStatus(guest.arrivalDate, guest.departureDate);
+
   return {
     ...guest,
-    isActive: isDateRangeActive(guest.arrivalDate, guest.departureDate),
-    status: getDateRangeStatus(guest.arrivalDate, guest.departureDate)
+    isActive,
+    status
   };
 }
 
@@ -103,7 +107,7 @@ export function enrichGuest(guest) {
  * @returns {object} Updated guest
  */
 export function updateGuest(guest, updates) {
-  const allowedFields = ['name', 'arrivalDate', 'departureDate'];
+  const allowedFields = ['name', 'arrivalDate', 'departureDate', 'checkoutDate'];
   const updatedGuest = { ...guest };
 
   for (const field of allowedFields) {

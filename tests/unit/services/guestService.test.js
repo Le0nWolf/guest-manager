@@ -238,16 +238,17 @@ describe('guestService', () => {
       await expect(service.checkoutGuest('999')).rejects.toThrow('not found');
     });
 
-    it('should throw error when guest has already departed', async () => {
-      const pastGuest = {
+    it('should throw error when guest has already been checked out', async () => {
+      const checkedOutGuest = {
         id: '1',
-        name: 'Past Guest',
+        name: 'Checked Out Guest',
         arrivalDate: formatDate(new Date(Date.now() - 10 * 86400000)),
-        departureDate: yesterday
+        departureDate: yesterday,
+        checkoutDate: yesterday
       };
-      mockRepository.findById.mockResolvedValue(pastGuest);
+      mockRepository.findById.mockResolvedValue(checkedOutGuest);
 
-      await expect(service.checkoutGuest('1')).rejects.toThrow('already departed');
+      await expect(service.checkoutGuest('1')).rejects.toThrow('already been checked out');
     });
 
     it('should throw error when guest has not arrived yet', async () => {
