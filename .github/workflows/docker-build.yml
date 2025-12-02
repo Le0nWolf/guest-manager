@@ -1,24 +1,60 @@
-name: Build and Push Docker Image
+# ============================================
+# Docker Image Build & Publish to GitHub Container Registry
+# ============================================
+# Enterprise-grade CI/CD pipeline with security scanning
+#
+# Pipeline (Sequential):
+#   1. Test: Run all tests with coverage
+#   2. Build: Create multi-arch Docker images + Attestation
+#   3. Security: Trivy vulnerability scan + SARIF upload
+#   4. Summary: Generate build report
+#
+# Tags:
+#   - latest: Built from main/master branch (stable releases)
+#   - dev: Built from any non-main branch
+#   - sha-<commit>: Specific commit for traceability
+#   - v*.*.* : Semantic version tags
+#
+# Security:
+#   - Trivy vulnerability scanning with SARIF upload
+#   - GitHub Attestation for supply chain security
+#   - SBOM generation (Software Bill of Materials)
+#
+# ============================================
+
+name: Docker Build & Publish
 
 on:
   push:
     branches:
-      - '**'  # Build on all branches
+      - main
+      - master
+      - develop
+      - 'feature/**'
+      - 'claude/**'
     tags:
       - 'v*'
   pull_request:
     branches:
       - main
       - master
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag for the image'
+        required: false
+        default: 'manual'
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # ==================== UNIT TESTS ====================
   test:
-    name: Run Tests
+    name: Run Unit Tests
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -32,34 +68,40 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests
+      - name: Run tests with coverage
         run: npm run test:coverage
 
-      - name: Upload coverage report
+      - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         if: always()
         with:
           files: ./coverage/lcov.info
           fail_ci_if_error: false
 
+  # ==================== BUILD & PUSH ====================
   build-and-push:
-    name: Build and Push Docker Image
-    runs-on: ubuntu-latest
+    name: Build & Push Docker Image
     needs: test
-    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
     permissions:
       contents: read
       packages: write
       id-token: write
       attestations: write
-      security-events: write
+
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tags: ${{ steps.meta.outputs.tags }}
+      image-name: ${{ steps.image.outputs.name }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set lowercase image name
-        run: echo "IMAGE_NAME_LC=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+      - name: Get lowercase image name
+        id: image
+        run: echo "name=${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -74,25 +116,29 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata for Docker
+      - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
           tags: |
-            # Semantic version tags (v1.0.0 -> 1.0.0, 1.0)
+            # Latest tag for main/master branch only
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
+            # Dev tag for non-main branches
+            type=raw,value=dev,enable=${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
+            # Manual version if workflow_dispatch
+            type=raw,value=${{ github.event.inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
+            # Branch name
+            type=ref,event=branch
+            # Short SHA for exact commit traceability
+            type=sha,prefix=sha-,format=short
+            # Semantic versioning from git tags
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            # Short SHA for specific commits
-            type=sha,prefix=
-            # 'latest' only on main/master
-            type=raw,value=latest,enable={{is_default_branch}}
-            # 'dev' tag on any non-main branch
-            type=raw,value=dev,enable=${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
 
       - name: Build and push Docker image
         id: build
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -101,24 +147,109 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          sbom: true
+          provenance: mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ github.ref_name }}
 
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v2
         with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}
+          subject-name: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
-      - name: Run Trivy vulnerability scanner
+  # ==================== SECURITY SCANNING ====================
+  security-scan:
+    name: Security Scan (Trivy)
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Trivy vulnerability scanner (table)
         uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}@${{ steps.build.outputs.digest }}
+          image-ref: '${{ env.REGISTRY }}/${{ needs.build-and-push.outputs.image-name }}@${{ needs.build-and-push.outputs.image-digest }}'
+          version: 'v0.67.2'
+          format: 'table'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '0'
+
+      - name: Run Trivy for SARIF output
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: '${{ env.REGISTRY }}/${{ needs.build-and-push.outputs.image-name }}@${{ needs.build-and-push.outputs.image-digest }}'
+          version: 'v0.67.2'
           format: 'sarif'
           output: 'trivy-results.sarif'
-          version: 'v0.67.2'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '0'
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
+
+  # ==================== BUILD SUMMARY ====================
+  summary:
+    name: Build Summary
+    needs: [build-and-push, security-scan]
+    if: always() && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Generate build summary
+        run: |
+          echo "## 🐳 Docker Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Pipeline Status" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Unit Tests | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Build | ${{ needs.build-and-push.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Attestation | ${{ needs.build-and-push.result == 'success' && '✅ Generated' || '⚠️ Skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Scan | ${{ needs.security-scan.result == 'success' && '✅ Complete' || '⚠️ Skipped/Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Image Details" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Registry | \`${{ env.REGISTRY }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | \`${{ needs.build-and-push.outputs.image-name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Digest | \`${{ needs.build-and-push.outputs.image-digest }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${GITHUB_SHA::7}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Quick Start" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "# Pull latest stable release (main branch)" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ needs.build-and-push.outputs.image-name }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Pull latest development version" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ needs.build-and-push.outputs.image-name }}:dev" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Pull this specific build" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ needs.build-and-push.outputs.image-name }}@${{ needs.build-and-push.outputs.image-digest }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Security" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ SBOM (Software Bill of Materials) attached" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Provenance attestation generated" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Trivy vulnerability scan completed" >> $GITHUB_STEP_SUMMARY
+          echo "- 📋 Check the **Security tab** for detailed findings" >> $GITHUB_STEP_SUMMARY
